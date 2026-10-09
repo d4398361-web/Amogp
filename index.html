@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>WiBSiTe BoT LvL — Panel</title>
+<title>WiBSiTe BoT LvL — Panel (Demo)</title>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <style>
 :root{
@@ -150,6 +150,7 @@ footer{text-align:center;color:#444;font-size:10px;padding:0 0 25px}
    </div>
    <h1>Admin Login</h1>
    <p>Sign in to access the panel.</p>
+   <p style="margin-top:8px;font-size:11px;color:#f2b84b;opacity:.85">Demo Mode · admin / udp</p>
   </div>
   <div class="field">
     <div class="label"><span>Username</span><span>Admin</span></div>
@@ -312,7 +313,66 @@ footer{text-align:center;color:#444;font-size:10px;padding:0 0 25px}
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
+/* ===== DEMO MODE (works on GitHub Pages / static hosting) ===== */
+const DEMO = true;
+const DEMO_USER = 'admin';
+const DEMO_PASS = 'udp';
+let demoAuthed = localStorage.getItem('wibsite_demo_auth') === '1';
+let demoAccounts = JSON.parse(localStorage.getItem('wibsite_demo_accounts') || '[]');
+
 const api = async (path, opts={}) => {
+  if (DEMO) {
+    // Simulate network delay
+    await new Promise(r => setTimeout(r, 280));
+    const method = (opts.method || 'GET').toUpperCase();
+    let body = {};
+    try { body = opts.body ? JSON.parse(opts.body) : {}; } catch {}
+
+    if (path === '/api/login' && method === 'POST') {
+      if (body.username === DEMO_USER && body.password === DEMO_PASS) {
+        demoAuthed = true;
+        localStorage.setItem('wibsite_demo_auth', '1');
+        return { ok: true };
+      }
+      throw new Error('Invalid username or password.');
+    }
+    if (path === '/api/logout' && method === 'POST') {
+      demoAuthed = false;
+      localStorage.removeItem('wibsite_demo_auth');
+      return { ok: true };
+    }
+    if (path === '/api/me') {
+      return { authed: !!demoAuthed };
+    }
+    if (path === '/api/state') {
+      return { accounts: demoAccounts };
+    }
+    if (path === '/api/generate' && method === 'POST') {
+      const uid = String(Math.floor(1000000000 + Math.random() * 8999999999));
+      const nick = (body.bot_name || 'BOT') + '_' + uid.slice(-4);
+      const acc = {
+        uid, nickname: nick, region: body.region || 'ME',
+        level: 1, exp: 0, likes: 0, status: 'IDLE',
+        active_matches: 0, matches_played: 0, target: 0,
+        banner_png: '', banner_mime: 'image/png', password: ''
+      };
+      demoAccounts.push(acc);
+      localStorage.setItem('wibsite_demo_accounts', JSON.stringify(demoAccounts));
+      return { ok: true, uid, nickname: nick };
+    }
+    if (path === '/api/delete-account' && method === 'POST') {
+      demoAccounts = demoAccounts.filter(a => a.uid !== String(body.uid));
+      localStorage.setItem('wibsite_demo_accounts', JSON.stringify(demoAccounts));
+      return { ok: true };
+    }
+    if (path === '/api/add-friend' && method === 'POST') {
+      return { ok: true, message: 'Friend request sent (demo)' };
+    }
+    // Fallback for any other endpoint
+    return { ok: true, demo: true };
+  }
+
+  // Real backend mode
   const r = await fetch(path, {
     credentials: 'same-origin',
     headers: {'Content-Type': 'application/json'},
